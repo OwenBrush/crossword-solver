@@ -10,5 +10,5 @@ Machine learning model trained to solve crossword questions
 - Given a clue and a number of letters (with some optionally filled in) the model will return the most likely answers.
 
 ### Datasets and tools:
-- https://xd.saul.pw/data/#download
+- https://xd.saul.pw/data/#download (xd-clues.zip)
 - Google Word2Vec
