@@ -3,14 +3,16 @@ import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
 from string import punctuation
+from gensim.parsing.preprocessing import remove_stopwords
 
 EXPRESSIONS_TO_REMOVE = ["\\"+x for x in list(punctuation)]
 EXPRESSIONS_TO_REMOVE.remove('\\!')
 
 
 class FeatureBuilder(BaseEstimator, TransformerMixin):
-    def __init__(self, models:list = None, min_characters_for_wordcount:int = 1):
+    def __init__(self, models:list = None, min_characters_for_wordcount:int = 1, remove_stop_words=True):
         self.min_characters_for_wordcount = min_characters_for_wordcount
+        self.remove_stop_words = remove_stop_words
 
     def fit(self, X, y = None):
         return self
@@ -19,6 +21,8 @@ class FeatureBuilder(BaseEstimator, TransformerMixin):
         X = X.copy()
         BooleanFeatures(X)
         CleanStrings(X)
+        if self.remove_stop_words:
+            ParseStopwords(X)
         CountStrings(X, self.min_characters_for_wordcount)
         
         if y is None:
@@ -50,7 +54,11 @@ def CountStrings(X:pd.DataFrame, min_characters_for_wordcount:int):
     X['answer_length'] = X['answer_characters'].str.len()
     return X
 
-    
+def ParseStopwords(X:pd.DataFrame):
+    clues_without_stops = X['clue'].astype(str).apply(remove_stopwords)
+    filter = clues_without_stops != ''
+    X.loc[filter, 'clue'] = clues_without_stops[filter] 
+    return X
     
 class CosineSimilarity(BaseEstimator, TransformerMixin):
     
