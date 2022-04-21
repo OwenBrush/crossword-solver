@@ -41,7 +41,7 @@ def CleanStrings(X:pd.DataFrame):
     X['clue'] = X['clue'].str.lower().str.strip()
     X['clue'] = X['clue'].replace('$', ' money ', regex=False)
     X['clue'] = X['clue'].replace('!', ' ! ', regex=False)
-    X['clue'] = X['clue'].replace('``', '"', regex=False)
+    # X['clue'] = X['clue'].replace('``', '"', regex=False)
     X['clue'] = X['clue'].replace(r'\b\w{1,1}\b','', regex=True) 
     X['clue'] = X['clue'].replace(EXPRESSIONS_TO_REMOVE, ' ',regex=True)
     X['clue'] = X['clue'].replace('\d+', '', regex=True)
