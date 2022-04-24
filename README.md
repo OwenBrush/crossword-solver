@@ -1,30 +1,52 @@
-# crossword-solver
+# Crossword Solving Model
 Machine learning model trained to solve crossword questions
 
 ### Goals:
 - Practice with natural language processing 
 - Create a model with an interesting and understandable application
-- Provide clear data visualization to showcase the results of the model
+- Provide clear data visualization to showcase the methodology and results of the model
 
 ### What it will do:
 - Given a clue and a number of letters (with some optionally filled in) the model will return the most likely answers.
 
-### Stretch Goals:
+### Ideas for Future Improvement:
 - Solve an entire puzzle, when given a list of clues and intersecting character positions
 - Use image recognition to solve a puzzle from an image or photo of a crossword
 
 ### Datasets and tools:
 - https://xd.saul.pw/data/#download (xd-clues.zip)
 - gensim word2vec pre-trained models:
-  - conceptnet-numberbatch-17-06-300
   - glove-wiki-gigaword-300
   - glove-twitter-200
-  - word2vec-google-news-30
+  - word2vec-google-news-300
+- Scikit/Sklearn libraries
 
-### Insights from data exploration and cleaning:
+# Model Map:
+
+![Flowchart of model operations](/images/model_diagram.png?raw=true "Number of unique clues and answers in cleaned dataset" )
+
+### Step 1) Eight features are built from the given clue:
+  -  Wiki Topic         Categorical (Using the word vectors of the pretrained Wiki model,clusters of "topics" are created and clue are fitted to them)
+  -  Twitter Topic      Categorical (Using the word vectors of the pretrained Twitter model,clusters of "topics" are created and clue are fitted to them)
+  -  Google Topic       Categorical (Using the word vectors of the pretrained Google model,clusters of "topics" are created and clue are fitted to them)
+  -  Pressence of Noun  Boolean     (Determined by clue containing multiple capital letters
+  -  Fill the Blank     Boolean     (Determined by clue containing an underscore)
+  -  Number of Words    Scalar      (Counts number of words in clue, threshold for minimum character count can be given during training)
+  -  Length of Answer   Scalar      (The total number of characters the answer is expected to fill)
+  -  Known characters   String      (This is not used for predicting, but to filter the vocabulary being used)
+    
+### Step 2) Cosign Similarities are predicted:
+  -  Using all of the features, except the known characters, the model then makes three predictions to determine what the likely cosign similarity between the given clue and expected answer are, for each of the pretrained models being used.
+
+### Step 3) Answer is predicted
+  - The model then parses then selects a list of all words contained in the vocabularies of the pretrained models that fit the expect length and known characters of the answer.
+  - Cosign similarities are generated for each word in the parsed vocabulary list.
+  - The words with the cosign similarity that is closest to the predicted cosing similarity are then chosen as possible answer, and the one with the highest confidence between all three models is chosen as the final prediction.
+
+# Exploratory Data Analysis:
 
 
-![Alt Text](/images/punctuation_percents.png?raw=true "Percentage of clues that contain each for of punctuation (before cleaning)")
+![Percentage of clues with different special characters](/images/punctuation_percents.png?raw=true "Percentage of clues that contain each for of punctuation (before cleaning)")
 
 - The presence of underscore indicates a "fill in the blank" type of clue which is different in nature from other clues
   - these clues could be diverted to a  model trained for this purpose
