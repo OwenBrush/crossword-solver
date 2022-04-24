@@ -21,6 +21,10 @@ Machine learning model trained to solve crossword questions
   - word2vec-google-news-300
 - Scikit/Sklearn libraries
 
+# Results:
+
+### *Coming Soon...*
+
 # Model Map:
 
 ![Flowchart of model operations](/images/model_diagram.png?raw=true "Number of unique clues and answers in cleaned dataset" )
