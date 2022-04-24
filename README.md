@@ -26,14 +26,14 @@ Machine learning model trained to solve crossword questions
 ![Flowchart of model operations](/images/model_diagram.png?raw=true "Number of unique clues and answers in cleaned dataset" )
 
 ### Step 1) Eight features are built from the given clue:
-  -  Wiki Topic         Categorical (Using the word vectors of the pretrained Wiki model,clusters of "topics" are created and clue are fitted to them)
-  -  Twitter Topic      Categorical (Using the word vectors of the pretrained Twitter model,clusters of "topics" are created and clue are fitted to them)
-  -  Google Topic       Categorical (Using the word vectors of the pretrained Google model,clusters of "topics" are created and clue are fitted to them)
-  -  Pressence of Noun  Boolean     (Determined by clue containing multiple capital letters
-  -  Fill the Blank     Boolean     (Determined by clue containing an underscore)
-  -  Number of Words    Scalar      (Counts number of words in clue, threshold for minimum character count can be given during training)
-  -  Length of Answer   Scalar      (The total number of characters the answer is expected to fill)
-  -  Known characters   String      (This is not used for predicting, but to filter the vocabulary being used)
+    -  Wiki Topic         Categorical (Clusters of "topics" are created for clues to be fitted to, using the word vectors of the pretrained Wiki model)
+    -  Twitter Topic      Categorical (Clusters of "topics" are created for clues to be fitted to, using the word vectors of the pretrained Twitter model)
+    -  Google Topic       Categorical (Clusters of "topics" are created for clues to be fitted to, using the word vectors of the pretrained Google model)
+    -  Pressence of Noun  Boolean     (Determined by clue containing multiple capital letters
+    -  Fill the Blank     Boolean     (Determined by clue containing an underscore)
+    -  Number of Words    Scalar      (Counts number of words in clue, threshold for minimum character count can be given during training)
+    -  Length of Answer   Scalar      (The total number of characters the answer is expected to fill)
+    -  Known characters   String      (This is not used for predicting, but to filter the vocabulary being used)
     
 ### Step 2) Cosign Similarities are predicted:
   -  Using all of the features, except the known characters, the model then makes three predictions to determine what the likely cosign similarity between the given clue and expected answer are, for each of the pretrained models being used.
