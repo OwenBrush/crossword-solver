@@ -30,9 +30,9 @@ Machine learning model trained to solve crossword questions
 ![Flowchart of model operations](/images/model_diagram.png?raw=true "Number of unique clues and answers in cleaned dataset" )
 
 ### Step 1) Eight features are built from the given clue:
-    -  Wiki Topic         Categorical (Clusters of "topics" are created for clues to be fitted to, using the word vectors of the pretrained Wiki model)
-    -  Twitter Topic      Categorical (Clusters of "topics" are created for clues to be fitted to, using the word vectors of the pretrained Twitter model)
-    -  Google Topic       Categorical (Clusters of "topics" are created for clues to be fitted to, using the word vectors of the pretrained Google model)
+    -  Wiki Cluster       Categorical (K-means clusters are created for clues to be fitted to, using the word vectors of the pretrained Wiki model)
+    -  Twitter Cluster    Categorical (K-means clusters are created for clues to be fitted to, using the word vectors of the pretrained Twitter model)
+    -  Google Cluster     Categorical (K-means clusters are created for clues to be fitted to, using the word vectors of the pretrained Google model)
     -  Pressence of Noun  Boolean     (Determined by clue containing multiple capital letters
     -  Fill the Blank     Boolean     (Determined by clue containing an underscore)
     -  Number of Words    Scalar      (Counts number of words in clue, threshold for minimum character count can be given during training)
