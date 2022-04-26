@@ -16,8 +16,8 @@ Machine learning model trained to solve crossword questions
 ### Datasets and tools:
 - https://xd.saul.pw/data/#download (xd-clues.zip)
 - gensim word2vec pre-trained models:
-  - glove-wiki-gigaword-300
-  - glove-twitter-200
+  - glove-wiki-gigaword-100
+  - glove-twitter-25
   - word2vec-google-news-300
 - Scikit/Sklearn libraries
 
