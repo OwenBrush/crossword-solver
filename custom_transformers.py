@@ -1,88 +1,127 @@
 
 import numpy as np
 import pandas as pd
+import random
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.decomposition import PCA
 from string import punctuation
 from gensim.parsing.preprocessing import remove_stopwords
 
 EXPRESSIONS_TO_REMOVE = ["\\"+x for x in list(punctuation)]
 EXPRESSIONS_TO_REMOVE.remove('\\!')
+EXPRESSIONS_TO_REMOVE.remove('\\$')
 
+class StringFeatures(BaseEstimator, TransformerMixin):
+    def __init__(self, min_characters_for_wordcount:int = 1, percent_of_known_characters:float=0):
+        self.min_characters_for_wordcount = min_characters_for_wordcount
+        self.percent_of_known_characters = percent_of_known_characters
 
-class FeatureBuilder(BaseEstimator, TransformerMixin):
-    def __init__(   self,
-                    boolean_features=True,
-                    clean_strings=True,
-                    parse_stopwords=True,
-                    count_strings=True,
-                    min_characters:int = 1):
-        
-        self.boolean_features = boolean_features
-        self.clean_strings = clean_strings
-        self.parse_stopwords = parse_stopwords
-        self.count_strings = count_strings
-        self.min_characters = min_characters
-
-
-    def fit(self, X, y = None):
+    def fit(self, X, y = None):    
         return self
-
-    def transform(self, X:pd.DataFrame, y:pd.DataFrame = None):
+    
+    def transform(self, X:pd.DataFrame, y:pd.Series = None):
         X = X.copy()
-        if self.boolean_features: boolean_features(X)
-        if self.clean_strings: clean_strings(X)
-        if self.parse_stopwords:parse_stopwords(X)
-        if self.count_strings :count_strings(X, self.min_characters)        
+        self.boolean_features(X)
+        self.clean_strings(X)
+        self.parse_stopwords(X)
+        self.count_clue_words(X)        
         if y is None:
             return X
         else:
             y = y.copy()
-            if self.clean_strings: y = y.str.lower().str.strip()   
-            return X, y
+            y = y.str.lower().str.strip()   
+            self.answer_lengths(X, y)
+            self.known_characters(X, y)
+            return X, y    
         
-def boolean_features(X:pd.DataFrame):
-    X['noun_involved'] = X['clue'].str.contains('[A-Z].*[A-Z]',regex=True).astype(float).astype('Int64')
-    X['fill_blank'] = X['clue'].str.contains('_', regex=False).astype(float).astype('Int64')
-    return X
+    def boolean_features(self, X:pd.DataFrame):
+        X['noun_involved'] = X['clue'].str.contains('[A-Z].*[A-Z]',regex=True).astype(float).astype('Int64')
+        X['fill_blank'] = X['clue'].str.contains('_', regex=False).astype(float).astype('Int64')
+        return X
 
-def clean_strings(X:pd.DataFrame):
-    X['clue'] = X['clue'].str.lower().str.strip()
-    X['clue'] = X['clue'].replace('$', ' money ', regex=False)
-    X['clue'] = X['clue'].replace('!', ' ! ', regex=False)
-    # X['clue'] = X['clue'].replace('``', '"', regex=False)
-    X['clue'] = X['clue'].replace(r'\b\w{1,1}\b','', regex=True) 
-    X['clue'] = X['clue'].replace(EXPRESSIONS_TO_REMOVE, ' ',regex=True)
-    X['clue'] = X['clue'].replace('\d+', '', regex=True)
-    X['clue'] = X['clue'].replace(' +', ' ', regex=True)
-    X['clue'] = X['clue'].replace(['nan',''], np.nan, regex=False)
-    return X
-        
-def count_strings(X:pd.DataFrame, min_characters_for_wordcount:int):
-    X['word_count'] = X['clue'].str.count(f'\\b\\w{{{min_characters_for_wordcount},}}') 
-    X['answer_length'] = X['answer_characters'].str.len()
-    return X
+    def clean_strings(self, X:pd.DataFrame):
+        X['clue'] = X['clue'].str.lower().str.strip()
+        X['clue'] = X['clue'].replace('$', ' $ ', regex=False)
+        X['clue'] = X['clue'].replace('!', ' ! ', regex=False)
+        X['clue'] = X['clue'].replace(r'\b\w{1,1}\b','', regex=True) 
+        X['clue'] = X['clue'].replace(EXPRESSIONS_TO_REMOVE, ' ',regex=True)
+        X['clue'] = X['clue'].replace('\d+', '', regex=True)
+        X['clue'] = X['clue'].replace(' +', ' ', regex=True)
+        X['clue'] = X['clue'].replace(['nan',''], np.nan, regex=False)
+        return X
+            
+    def parse_stopwords(self, X:pd.DataFrame):
+        clues_without_stops = X['clue'].astype(str).apply(remove_stopwords)
+        filter = clues_without_stops != ''
+        X.loc[filter, 'clue'] = clues_without_stops[filter] 
+        return X
+    
+    def count_clue_words(self, X:pd.DataFrame):
+        X['word_count'] = X['clue'].str.count(f'\\b\\w{{{self.min_characters_for_wordcount},}}') 
+        # X['answer_length'] = X['answer_characters'].str.len()
+        return X
 
-def parse_stopwords(X:pd.DataFrame):
-    clues_without_stops = X['clue'].astype(str).apply(remove_stopwords)
-    filter = clues_without_stops != ''
-    X.loc[filter, 'clue'] = clues_without_stops[filter] 
-    return X
-    
-class CosineSimilarity(BaseEstimator, TransformerMixin):
-    
-    def __init__(self, gensim_models:list):
-        self.gensim_models = gensim_models
+    def answer_lengths(self, X:pd.DataFrame, y:pd.Series):
+        X['answer_length'] = y.str.len().astype(int)
+        return X
         
-    def set_word2vec_models(self, gensim_models:list):
-        self.gensim_models = gensim_models
-    
+    def known_characters(self, X:pd.DataFrame, y:pd.Series):
+        def random_character_assignment(text, percent):
+            known_characters = random.sample(range(len(text)),round(len(text)*percent))
+            new_text = ''
+            for i, x in enumerate(text):
+                if i in known_characters:
+                    new_text+=x
+                else:
+                    new_text+='_'
+            return new_text
+        X['answer_characters'] = y.apply(random_character_assignment, args=[self.percent_of_known_characters])
+        return X
+
+
+class PCAFeatures(BaseEstimator, TransformerMixin):
+    def __init__(   self, model_dict:dict, pca_components:int = 10):
+        
+        self.model_dict = model_dict
+        self.pca_components = pca_components
+
+
     def fit(self, X, y = None):
+        self.word_vector_dict = {}
+        self.pca_dict = {}
+        for model_name, model in self.model_dict.items():
+            #Convert clues to vectors
+            vocab = model.index_to_key
+            clues = X['clue'].astype(str).apply(lambda clue: [x for x in clue.split() if x in vocab])
+            filter = clues.str.len() > 0
+            clue_vectors = np.array([np.mean(model[x],axis=0) for x in clues[filter]]) 
+            self.word_vector_dict[model_name] = clue_vectors
+            #Train PCA
+            pca = PCA(n_components=self.pca_components)   
+            pca.fit(clue_vectors)
+            self.pca_dict = pca       
         return self
 
-    def transform(self, X, y = None):
-        for model in self.gensim_models:
-           pass
+    def transform(self, X:pd.DataFrame, y:pd.DataFrame = None):
+        X = X.copy()
+        self.apply_pca(X)
         if y is None:
             return X
-        else: 
+        else:
             return X, y
+        
+    def apply_pca(self, X:pd.DataFrame):
+        X = X.copy()
+        for model_name, model in self.model_dict.items():
+            #Convert clues to vectors
+            vocab = model.index_to_key
+            clues = X['clue'].astype(str).apply(lambda clue: [x for x in clue.split() if x in vocab])
+            clues = clues[clues.str.len() > 0]
+            clue_vectors = np.array([np.mean(model[x],axis=0) for x in clues])
+            
+            pca = pd.DataFrame(self.pca_dict[model_name].transform(clue_vectors))
+            pca.index = clues.index
+            pca.columns = [f'{model_name}_{x}' for x in pca.columns]
+            X = pd.concat([X,pca],axis=1).fillna(0)
+        return X
+    
