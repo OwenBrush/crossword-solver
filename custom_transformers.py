@@ -11,10 +11,12 @@ EXPRESSIONS_TO_REMOVE = ["\\"+x for x in list(punctuation)]
 EXPRESSIONS_TO_REMOVE.remove('\\!')
 EXPRESSIONS_TO_REMOVE.remove('\\$')
 
+DEFAULT_PERCENTAGES = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
+
 class StringFeatures(BaseEstimator, TransformerMixin):
-    def __init__(self, min_characters_for_wordcount:int = 1, percent_of_known_characters:float=0):
+    def __init__(self, min_characters_for_wordcount:int = 1, percents_of_known_characters:list=DEFAULT_PERCENTAGES):
         self.min_characters_for_wordcount = min_characters_for_wordcount
-        self.percent_of_known_characters = percent_of_known_characters
+        self.percents_of_known_characters = percents_of_known_characters
 
     def fit(self, X, y = None):    
         return self
@@ -75,7 +77,8 @@ class StringFeatures(BaseEstimator, TransformerMixin):
                 else:
                     new_text+='_'
             return new_text
-        X['answer_characters'] = y.apply(random_character_assignment, args=[self.percent_of_known_characters])
+        for percent in self.percents_of_known_characters:
+            X[f'{percent*100}%_known_characters'] = y.apply(random_character_assignment, args=[percent])
         return X
 
 
