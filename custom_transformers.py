@@ -1,9 +1,11 @@
 
+from unittest import mock
 import numpy as np
 import pandas as pd
 import random
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.decomposition import PCA
+from sklearn.metrics import mean_absolute_error, median_absolute_error
 from string import punctuation
 from gensim.parsing.preprocessing import remove_stopwords
 
@@ -11,10 +13,44 @@ EXPRESSIONS_TO_REMOVE = ["\\"+x for x in list(punctuation)]
 EXPRESSIONS_TO_REMOVE.remove('\\!')
 EXPRESSIONS_TO_REMOVE.remove('\\$')
 
-DEFAULT_PERCENTAGES = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
+CHARACTER_PERCENTAGES = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
+COSINE_PREDICTION_FEATURES = ['noun_involved', 
+                              'fill_blank', 
+                              'word_count', 
+                              'answer_length',                   
+                              'twitter_0', 
+                              'twitter_1', 
+                              'twitter_2', 
+                              'twitter_3', 
+                              'twitter_4',
+                              'twitter_5', 
+                              'twitter_6', 
+                              'twitter_7', 
+                              'twitter_8', 
+                              'twitter_9',
+                              'google_0', 
+                              'google_1', 
+                              'google_2', 
+                              'google_3', 
+                              'google_4', 
+                              'google_5',
+                              'google_6', 
+                              'google_7', 
+                              'google_8', 
+                              'google_9', 
+                              'wiki_0', 
+                              'wiki_1',
+                              'wiki_2', 
+                              'wiki_3', 
+                              'wiki_4', 
+                              'wiki_5', 
+                              'wiki_6', 
+                              'wiki_7', 
+                              'wiki_8',
+                              'wiki_9']
 
 class StringFeatures(BaseEstimator, TransformerMixin):
-    def __init__(self, min_characters_for_wordcount:int = 1, percents_of_known_characters:list=DEFAULT_PERCENTAGES):
+    def __init__(self, min_characters_for_wordcount:int = 1, percents_of_known_characters:list=CHARACTER_PERCENTAGES):
         self.min_characters_for_wordcount = min_characters_for_wordcount
         self.percents_of_known_characters = percents_of_known_characters
 
@@ -83,16 +119,16 @@ class StringFeatures(BaseEstimator, TransformerMixin):
 
 
 class PCAFeatures(BaseEstimator, TransformerMixin):
-    def __init__(   self, model_dict:dict, pca_components:int = 10):
+    def __init__(   self, gensim_model_dict:dict, pca_components:int = 10):
         
-        self.model_dict = model_dict
+        self.gensim_model_dict = gensim_model_dict
         self.pca_components = pca_components
 
 
     def fit(self, X, y = None):
         self.word_vector_dict = {}
         self.pca_dict = {}
-        for model_name, model in self.model_dict.items():
+        for model_name, model in self.gensim_model_dict.items():
             #Convert clues to vectors
             vocab = model.index_to_key
             clues = X['clue'].astype(str).apply(lambda clue: [x for x in clue.split() if x in vocab])
@@ -102,10 +138,10 @@ class PCAFeatures(BaseEstimator, TransformerMixin):
             #Train PCA
             pca = PCA(n_components=self.pca_components)   
             pca.fit(clue_vectors)
-            self.pca_dict = pca       
+            self.pca_dict[model_name] = pca       
         return self
 
-    def transform(self, X:pd.DataFrame, y:pd.DataFrame = None):
+    def transform(self, X:pd.DataFrame, y:pd.Series = None):
         X = X.copy()
         self.apply_pca(X)
         if y is None:
@@ -114,17 +150,56 @@ class PCAFeatures(BaseEstimator, TransformerMixin):
             return X, y
         
     def apply_pca(self, X:pd.DataFrame):
-        X = X.copy()
-        for model_name, model in self.model_dict.items():
+        for model_name, model in self.gensim_model_dict.items():
             #Convert clues to vectors
             vocab = model.index_to_key
             clues = X['clue'].astype(str).apply(lambda clue: [x for x in clue.split() if x in vocab])
-            clues = clues[clues.str.len() > 0]
+            filter = clues.str.len() > 0
+            clues = clues[filter]
             clue_vectors = np.array([np.mean(model[x],axis=0) for x in clues])
             
-            pca = pd.DataFrame(self.pca_dict[model_name].transform(clue_vectors))
-            pca.index = clues.index
-            pca.columns = [f'{model_name}_{x}' for x in pca.columns]
-            X = pd.concat([X,pca],axis=1).fillna(0)
+            pca_features = pd.DataFrame(self.pca_dict[model_name].transform(clue_vectors))
+            pca_features.index = clues.index
+            pca_features.columns = [f'{model_name}_{x}' for x in pca_features.columns]
+            for feature in pca_features.columns:
+                X.loc[filter, feature] = pca_features[feature]
+                X[feature].fillna(0,inplace=True)
         return X
     
+    
+class SimilarityPrediction(BaseEstimator, TransformerMixin):
+    def __init__(   self, gensim_model_dict:dict, predictor_dict:dict,):
+        
+        self.gensim_model_dict = gensim_model_dict
+        self.predictor_dict = predictor_dict
+        self.predictions = {}
+
+
+    def fit(self, X:pd.DataFrame, y:pd.Series = None):
+        features = X[COSINE_PREDICTION_FEATURES] 
+        for model_name, model in self.gensim_model_dict.items():
+            filter = X[f'{model_name}_cosine_similarity'].notna()
+            cosines = X[filter][f'{model_name}_cosine_similarity']
+            predictor = self.predictor_dict[model_name]
+            predictor.fit(features[filter], cosines)
+        pass
+
+    def transform(self, X:pd.DataFrame, y:pd.Series = None):
+        X = X.copy()
+        features = X[COSINE_PREDICTION_FEATURES] 
+        for model_name, model in self.gensim_model_dict.items():
+            predictor = self.predictor_dict[model_name]
+            cosines = predictor.predict(features)
+            X[f'{model_name}_predicted_similarity'] = cosines
+            filter = X[f'{model_name}_cosine_similarity'].notna()
+            
+            true = X[filter][f'{model_name}_cosine_similarity']
+            predict = X[filter][f'{model_name}_predicted_similarity']
+            mean_error = mean_absolute_error(true,predict)
+            median_error = median_absolute_error(true,predict)
+            print(f'{model_name}, {predictor}\nMean Absolute Error: {mean_error}\nMedian Absolute Error: {median_error}')
+        if y is None:
+            return X
+        else:
+            return X, y
+        
