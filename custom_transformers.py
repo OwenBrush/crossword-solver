@@ -205,7 +205,6 @@ class SelectTopNWords():
     def predict(self, X:pd.DataFrame, known_characters:pd.Series, gensim_models:dict):
         self.all_predictions ={}
         for model_name, model in gensim_models.items():
-            print(f'matching with {model_name} vocabulary')
             model_predictions = {}
             word_vectors = self.vectorize_sentences(X['clue'], model)
             for index, vector in word_vectors.iteritems():
