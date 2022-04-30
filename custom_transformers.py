@@ -1,13 +1,13 @@
-
-from unittest import mock
 import numpy as np
 import pandas as pd
 import random
+import re
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.decomposition import PCA
-from sklearn.metrics import mean_absolute_error, median_absolute_error
 from string import punctuation
 from gensim.parsing.preprocessing import remove_stopwords
+from tqdm import tqdm
+
 
 EXPRESSIONS_TO_REMOVE = ["\\"+x for x in list(punctuation)]
 EXPRESSIONS_TO_REMOVE.remove('\\!')
@@ -128,7 +128,7 @@ class PCAFeatures(BaseEstimator, TransformerMixin):
     def fit(self, X, y = None):
         self.word_vector_dict = {}
         self.pca_dict = {}
-        for model_name, model in self.gensim_model_dict.items():
+        for model_name, model in tqdm(self.gensim_model_dict.items()):
             #Convert clues to vectors
             vocab = model.index_to_key
             clues = X['clue'].astype(str).apply(lambda clue: [x for x in clue.split() if x in vocab])
@@ -150,7 +150,7 @@ class PCAFeatures(BaseEstimator, TransformerMixin):
             return X, y
         
     def apply_pca(self, X:pd.DataFrame):
-        for model_name, model in self.gensim_model_dict.items():
+        for model_name, model in tqdm(self.gensim_model_dict.items()):
             #Convert clues to vectors
             vocab = model.index_to_key
             clues = X['clue'].astype(str).apply(lambda clue: [x for x in clue.split() if x in vocab])
@@ -177,7 +177,7 @@ class SimilarityPrediction(BaseEstimator, TransformerMixin):
 
     def fit(self, X:pd.DataFrame, y:pd.Series = None):
         features = X[COSINE_PREDICTION_FEATURES] 
-        for model_name, model in self.gensim_model_dict.items():
+        for model_name, model in tqdm(self.gensim_model_dict.items()):
             filter = X[f'{model_name}_cosine_similarity'].notna()
             cosines = X[filter][f'{model_name}_cosine_similarity']
             predictor = self.predictor_dict[model_name]
@@ -187,19 +187,65 @@ class SimilarityPrediction(BaseEstimator, TransformerMixin):
     def transform(self, X:pd.DataFrame, y:pd.Series = None):
         X = X.copy()
         features = X[COSINE_PREDICTION_FEATURES] 
-        for model_name, model in self.gensim_model_dict.items():
+        for model_name, model in tqdm(self.gensim_model_dict.items()):
             predictor = self.predictor_dict[model_name]
             cosines = predictor.predict(features)
             X[f'{model_name}_predicted_similarity'] = cosines
-            filter = X[f'{model_name}_cosine_similarity'].notna()
-            
-            true = X[filter][f'{model_name}_cosine_similarity']
-            predict = X[filter][f'{model_name}_predicted_similarity']
-            mean_error = mean_absolute_error(true,predict)
-            median_error = median_absolute_error(true,predict)
-            print(f'{model_name}, {predictor}\nMean Absolute Error: {mean_error}\nMedian Absolute Error: {median_error}')
         if y is None:
             return X
         else:
             return X, y
         
+
+class SelectTopNWords():
+    def __init__(self, topN:int=5):   
+        self.topN = topN
+        self.all_predictions ={}
+        
+    def predict(self, X:pd.DataFrame, known_characters:pd.Series, gensim_models:dict):
+        self.all_predictions ={}
+        for model_name, model in gensim_models.items():
+            print(f'matching with {model_name} vocabulary')
+            model_predictions = {}
+            word_vectors = self.vectorize_sentences(X['clue'], model)
+            for index, vector in word_vectors.iteritems():
+                target = X[f'{model_name}_predicted_similarity'].loc[index]
+                regex_pattern = re.compile('^'+''.join([x if not x == '_' else '[a-z]' for x in known_characters[index]])+'$')
+                similarity_index = model.similar_by_vector(vector, topn=len(model.index_to_key))
+                available_words = [x[0] for x in similarity_index if regex_pattern.match(x[0]) ]
+                similarity_scores = np.asarray([x[1] for x in similarity_index if regex_pattern.match(x[0]) ])
+                chosen_indices = np.abs(similarity_scores - target ).argsort()[:self.topN*2]
+                word_matches = {}
+                for i in chosen_indices:
+                    word_matches[available_words[i]] = 1 - abs(target - similarity_scores[i])
+                model_predictions[index] = word_matches
+            self.all_predictions[model_name] = model_predictions
+        
+        return self.compile_Predictions(self.all_predictions)
+    
+    def compile_Predictions(self, predictions):
+        final_words = {}
+        final_scores = {}
+        for i, row in pd.DataFrame(predictions).iterrows():
+            votes = {}
+            for chosen_words in row:
+                if not chosen_words is np.nan:
+                    for word, score in chosen_words.items():
+                        if word in votes:
+                            votes[word]+=score
+                        else:
+                            votes[word]= score
+            votes = sorted(votes.items(), key= lambda kv: kv[1], reverse=True)[:self.topN]
+            final_words[i] = [vote[0] for vote in votes]
+            final_scores[i] = [vote[1]/len(predictions) for vote in votes]          
+        return pd.DataFrame(final_words).T, pd.DataFrame(final_scores).T    
+    
+
+    def vectorize_sentences(self, strings:pd.Series, model):
+        vocab = model.index_to_key
+        clues = strings.astype(str).apply(lambda clue: [x for x in clue.split() if x in vocab])
+        df_filter = clues.str.len() > 0
+        clues = clues[df_filter]
+        clue_vectors = pd.Series([np.mean(model[x],axis=0) for x in clues])
+        clue_vectors.index = clues.index
+        return clue_vectors

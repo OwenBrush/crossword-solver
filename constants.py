@@ -1,0 +1,11 @@
+DATA_FOLDER = 'data/'
+ORIGIN = 'origin_data.tsv'
+CLEAN = 'clean_data.csv'
+RESAMPLED ='resampled_data.csv'
+TRAIN = 'train_data.csv'
+PCA_TRAIN = 'pca_train_data.csv'
+TEST = 'test_data.csv'
+PCA_TEST = 'pca_test_data.csv'
+PREDICTED_SIMILARITIES = 'cosine_test_data.csv'
+SAMPLE_SIZE = 50000
+RANDOM_STATE = 357394
