@@ -50,6 +50,20 @@ COSINE_PREDICTION_FEATURES = ['noun_involved',
                               'wiki_9']
 
 class StringFeatures(BaseEstimator, TransformerMixin):
+    """This transformer cleans the clues and builds features corresponding to them.
+        Required:
+            X:  Dataframe containing a 'clue' column
+        Optional:
+            y:  Series of corresponding anwers, passing this in will automatically generate 
+            the "answer length" column.
+            
+            min_characters_for_wordcount: Int that determines the required length of a word for it to
+            count towards the "word_count" feature.
+            
+            percents_of_known_characters: List containing floats between 0 and 1, representing 
+            precentages. If a y is also included, this will automatically create columns of partially 
+            filled answers, used for training and testing purposes.       
+    """
     def __init__(self, min_characters_for_wordcount:int = 1, percents_of_known_characters:list=CHARACTER_PERCENTAGES):
         self.min_characters_for_wordcount = min_characters_for_wordcount
         self.percents_of_known_characters = percents_of_known_characters
@@ -119,6 +133,16 @@ class StringFeatures(BaseEstimator, TransformerMixin):
 
 
 class PCAFeatures(BaseEstimator, TransformerMixin):
+    """This transformer vectorizes the clues and convert the vectors into a smaller feature set
+       using PCA.
+       
+       Required: 
+            gensim_model_dict: Dictionary with the gensim model id as keys and instantiated model as values.
+       
+       Optional:
+            pca_components: Int determining the number of features that should be built from the word vectors
+            that each model produces for a given clue. 
+    """
     def __init__(   self, gensim_model_dict:dict, pca_components:int = 10):
         
         self.gensim_model_dict = gensim_model_dict
@@ -168,6 +192,15 @@ class PCAFeatures(BaseEstimator, TransformerMixin):
     
     
 class SimilarityPrediction(BaseEstimator, TransformerMixin):
+    """This estimator uses the given gensim models and estimators to produce the
+       predicted_similarity features.
+       
+       Required:
+            gensim_model_dict: Dictionary with the gensim model id as keys and instantiated model as values.
+            
+            predictor_dict: Dictionary with the gensim model id as keys corresponding to the gensim model 
+            that the estimator is meant for, and instantiated estimator as values.
+    """
     def __init__(   self, gensim_model_dict:dict, predictor_dict:dict,):
         
         self.gensim_model_dict = gensim_model_dict
@@ -198,6 +231,17 @@ class SimilarityPrediction(BaseEstimator, TransformerMixin):
         
 
 class SelectTopNWords():
+    """This estimator predcits the answer for a given clue by using the previously predicted
+       cosine similarities to parse the vocabularies of the models and select an answer with
+       the expected degree of similarity.  Each model votes on a word and gives it a confidence 
+       score, and their combined selections are narrows to the top n highest scores.
+       Two dataframes are returned, one containing the chosen words and another containing their
+       confidence scores.
+       
+       Optional:
+            TopN: Int, determining the number of words returned.  Models will selected twice this 
+            amount individually before their choices are paired down to the final selection by voting.
+    """
     def __init__(self, topN:int=5):   
         self.topN = topN
         self.all_predictions ={}
@@ -228,15 +272,15 @@ class SelectTopNWords():
         for i, row in pd.DataFrame(predictions).iterrows():
             votes = {}
             for chosen_words in row:
-                if not chosen_words is np.nan:
+                if type(chosen_words) is dict:
                     for word, score in chosen_words.items():
                         if word in votes:
                             votes[word]+=score
                         else:
                             votes[word]= score
             votes = sorted(votes.items(), key= lambda kv: kv[1], reverse=True)[:self.topN]
-            final_words[i] = [vote[0] for vote in votes]
-            final_scores[i] = [vote[1]/len(predictions) for vote in votes]          
+            final_words[i] = [vote[0] for vote in votes] + [''] * (5 - len(votes))  
+            final_scores[i] = [vote[1]/len(predictions) for vote in votes] + [np.nan] * (5 - len(votes))    
         return pd.DataFrame(final_words).T, pd.DataFrame(final_scores).T    
     
 
@@ -248,3 +292,19 @@ class SelectTopNWords():
         clue_vectors = pd.Series([np.mean(model[x],axis=0) for x in clues])
         clue_vectors.index = clues.index
         return clue_vectors
+    
+class SelectRandomWords():
+    def __init__(self):   
+        self.all_predictions = {}
+        
+    def predict(self, known_characters:pd.Series, gensim_models:dict):
+        self.all_predictions = {}
+        vocab = set()
+        for model_name, model in gensim_models.items():
+            vocab.update(model.index_to_key)
+            
+        for index, characters in known_characters.iteritems():
+            regex_pattern = re.compile('^'+''.join([x if not x == '_' else '[a-z]' for x in characters])+'$')
+            available_words = [x[0] for x in vocab if regex_pattern.match(x[0]) ]
+            self.all_predictions[i] = available_words[random.randint(0,len(available_words)-1)]
+        return pd.DataFrame(self.all_predictions).T
