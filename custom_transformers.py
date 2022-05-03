@@ -248,7 +248,7 @@ class SelectTopNWords():
         
     def predict(self, X:pd.DataFrame, known_characters:pd.Series, gensim_models:dict):
         self.all_predictions ={}
-        for model_name, model in gensim_models.items():
+        for model_name, model in tqdm(gensim_models.items()):
             model_predictions = {}
             word_vectors = self.vectorize_sentences(X['clue'], model)
             for index, vector in word_vectors.iteritems():
@@ -303,8 +303,11 @@ class SelectRandomWords():
         for model_name, model in gensim_models.items():
             vocab.update(model.index_to_key)
             
-        for index, characters in known_characters.iteritems():
+        for index, characters in tqdm(known_characters.iteritems()):
             regex_pattern = re.compile('^'+''.join([x if not x == '_' else '[a-z]' for x in characters])+'$')
-            available_words = [x[0] for x in vocab if regex_pattern.match(x[0]) ]
-            self.all_predictions[i] = available_words[random.randint(0,len(available_words)-1)]
-        return pd.DataFrame(self.all_predictions).T
+            available_words = [x for x in list(vocab) if regex_pattern.match(x) ]
+            if len(available_words) > 0:
+                self.all_predictions[index] = random.choice(available_words)
+            else:
+                self.all_predictions[index] = ''
+        return pd.DataFrame.from_dict(self.all_predictions, orient='index')
