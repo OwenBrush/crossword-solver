@@ -46,7 +46,7 @@ The results of this first iteration of the model are very promising, showing tha
 - The vocabulary limit indicates the limitation of the vocabulary of the models used, meaning that it would be impossible for the models used in this trial to predict higher than this threshold.  Models trained on google, wiki, and twitter were selected for their extensive vocabularies but even still, crossword answers are often creatively made up words, or compounded words that would not be used in normal speach.
 - It is worth noting that the random selection for no known characters returned only a single correct answer so it's accuracy may actually be lower than indicated.
 
-There are two possible uses for this model with which these results can be assessed:
+### There are two possible uses for this model with which these results can be assessed:
 
 #### 1) Automated solving of crossword puzzles:
   For this task, the model is not yet ready.  With no known characters the model can only predict a correct answer 1 in 2000 times, making the task of automatically solving a puzzle with it statistically impossible. However, the improvement that it shows above simple random selection does show that it could be useful for this task given enough refinement and optimization and/or by being used in conjuction with another aproach.
